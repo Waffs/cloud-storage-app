@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from google.auth.transport.requests import Request
 import os
 import io
 from dotenv import load_dotenv
@@ -20,9 +21,23 @@ def get_credentials():
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    else:
-        flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-        creds = flow.run_local_server(port=0)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = Flow.from_client_config(
+                {
+                    "web": {
+                        "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                        "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                        "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                        "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                        "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+                    }
+                },
+                SCOPES
+            )
+            creds = flow.run_local_server(port=0)
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
     return creds
@@ -39,9 +54,16 @@ def upload_file():
             creds = get_credentials()
             service = build('drive', 'v3', credentials=creds)
 
+            # Save file to a temporary location
+            temp_file_path = f"/tmp/{file.filename}"
+            file.save(temp_file_path)
+
             file_metadata = {'name': file.filename}
-            media = MediaFileUpload(file.filename, mimetype=file.mimetype)
+            media = MediaFileUpload(temp_file_path, mimetype=file.mimetype)
             uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+            # Remove temporary file
+            os.remove(temp_file_path)
 
             flash(f'File {file.filename} uploaded successfully!')
             return redirect(url_for('index'))
@@ -84,5 +106,10 @@ def share_file(file_id):
         return redirect(url_for('index'))
     return render_template('share.html', file_id=file_id)
 
+@app.errorhandler(500)
+def internal_server_error(error):
+    app.logger.error('Server Error: %s', (error))
+    return 'Internal Server Error', 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=False)
