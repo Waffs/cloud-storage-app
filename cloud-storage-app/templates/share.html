@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share File</title>
+</head>
+<body>
+    <h1>Share a File</h1>
+    <form action="{{ url_for('share_file', file_id=file_id) }}" method="post">
+        <label for="email">Enter the email to share with:</label>
+        <input type="email" name="email" required>
+        <button type="submit">Share</button>
+    </form>
+</body>
+</html>
