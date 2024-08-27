@@ -16,8 +16,6 @@ app.secret_key = os.getenv('SECRET_KEY')
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 # Function to get Google Drive API credentials
-
-
 def get_credentials():
     creds = None
     if os.path.exists('token.json'):
@@ -29,11 +27,9 @@ def get_credentials():
             token.write(creds.to_json())
     return creds
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
@@ -50,7 +46,6 @@ def upload_file():
             flash(f'File {file.filename} uploaded successfully!')
             return redirect(url_for('index'))
     return render_template('upload.html')
-
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
@@ -71,7 +66,6 @@ def download_file(file_id):
 
     return send_file(file_io, as_attachment=True, download_name=file_name)
 
-
 @app.route('/share/<file_id>', methods=['GET', 'POST'])
 def share_file(file_id):
     if request.method == 'POST':
@@ -89,7 +83,6 @@ def share_file(file_id):
         flash(f'File shared with {email} successfully!')
         return redirect(url_for('index'))
     return render_template('share.html', file_id=file_id)
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
