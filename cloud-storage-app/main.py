@@ -17,6 +17,20 @@ logging.basicConfig(level=logging.DEBUG)
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
+# Load client config from environment variables or a secure location
+CLIENT_CONFIG = {
+    "web": {
+        "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+        "project_id": os.getenv('GOOGLE_PROJECT_ID'),
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+        "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+        "javascript_origins": [os.getenv('APP_URL')]
+    }
+}
+
 def get_credentials():
     creds = None
     if session.get('token'):
@@ -43,21 +57,8 @@ def index():
 @app.route('/auth')
 def auth():
     try:
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
-                    "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-                    "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
-                    "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
-                    "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
-                }
-            },
-            SCOPES
-        )
-        # Explicitly set the redirect_uri
+        flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
         flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
-        app.logger.debug(f"GOOGLE_DRIVE_REDIRECT_URI: {os.getenv('GOOGLE_DRIVE_REDIRECT_URI')}")
         authorization_url, _ = flow.authorization_url(prompt='consent')
         return redirect(authorization_url)
     except Exception as e:
@@ -67,29 +68,11 @@ def auth():
 @app.route('/oauth2callback')
 def oauth2callback():
     try:
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
-                    "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-                    "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
-                    "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
-                    "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
-                }
-            },
-            SCOPES
-        )
-        # Explicitly set the redirect_uri
+        flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
         flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
-        
-        app.logger.debug(f"Request URL: {request.url}")
-        app.logger.debug(f"GOOGLE_DRIVE_REDIRECT_URI: {os.getenv('GOOGLE_DRIVE_REDIRECT_URI')}")
-        
-        # Use the request URL to complete the flow
         flow.fetch_token(authorization_response=request.url)
         
         credentials = flow.credentials
-
         session['token'] = credentials.token
         session['refresh_token'] = credentials.refresh_token
 
