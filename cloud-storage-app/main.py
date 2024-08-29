@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -45,43 +45,61 @@ def index():
 
 @app.route('/auth')
 def auth():
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
-                "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-                "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
-                "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
-                "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
-            }
-        },
-        SCOPES
-    )
-    authorization_url, _ = flow.authorization_url(prompt='consent')
-    return redirect(authorization_url)
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                    "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                    "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                    "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                    "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+                }
+            },
+            SCOPES
+        )
+        # Explicitly set the redirect_uri
+        flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+        app.logger.debug(f"GOOGLE_DRIVE_REDIRECT_URI: {os.getenv('GOOGLE_DRIVE_REDIRECT_URI')}")
+        authorization_url, _ = flow.authorization_url(prompt='consent')
+        return redirect(authorization_url)
+    except Exception as e:
+        app.logger.error(f"Error in auth route: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/oauth2callback')
 def oauth2callback():
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
-                "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-                "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
-                "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
-                "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
-            }
-        },
-        SCOPES,
-        redirect_uri=os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
-    )
-    flow.fetch_token(code=request.args.get('code'))
-    credentials = flow.credentials
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                    "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                    "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                    "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                    "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+                }
+            },
+            SCOPES
+        )
+        # Explicitly set the redirect_uri
+        flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+        
+        app.logger.debug(f"Request URL: {request.url}")
+        app.logger.debug(f"GOOGLE_DRIVE_REDIRECT_URI: {os.getenv('GOOGLE_DRIVE_REDIRECT_URI')}")
+        
+        # Use the request URL to complete the flow
+        flow.fetch_token(authorization_response=request.url)
+        
+        credentials = flow.credentials
 
-    session['token'] = credentials.token
-    session['refresh_token'] = credentials.refresh_token
+        session['token'] = credentials.token
+        session['refresh_token'] = credentials.refresh_token
 
-    return redirect(url_for('index'))
+        return redirect(url_for('index'))
+    except Exception as e:
+        app.logger.error(f"Error in oauth2callback: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
@@ -91,6 +109,7 @@ def upload_file():
             if file:
                 creds = get_credentials()
                 if not creds:
+                    app.logger.info("No credentials, redirecting to auth")
                     return redirect(url_for('auth'))
                 service = build('drive', 'v3', credentials=creds)
 
