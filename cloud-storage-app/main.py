@@ -11,10 +11,10 @@ from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
 app = flask.Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')  # Use a secure secret key
+app.secret_key = os.getenv('SECRET_KEY')  
 
 # OAuth 2.0 configuration
-CLIENT_SECRETS_FILE = "client_secret.json"  # Ensure this file is in your project
+CLIENT_SECRETS_FILE = "client_secret.json"  
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 API_SERVICE_NAME = 'drive'
 API_VERSION = 'v3'
