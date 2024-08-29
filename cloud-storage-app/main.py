@@ -8,7 +8,7 @@ import google.auth.transport.requests
 import requests
 
 app = Flask("Google Login App")
-app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+app.secret_key = os.environ.get("SECRET_KEY")
 
 # Get configuration from environment variables
 CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
