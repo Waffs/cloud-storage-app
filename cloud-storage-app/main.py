@@ -1,77 +1,120 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 from google.auth.transport.requests import Request
 import os
 import io
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
-# Function to get Google Drive API credentials
 def get_credentials():
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if session.get('token'):
+        creds = Credentials(
+            token=session['token'],
+            refresh_token=session.get('refresh_token'),
+            token_uri=os.getenv('GOOGLE_TOKEN_URI'),
+            client_id=os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+            client_secret=os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+            scopes=SCOPES
+        )
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            session['token'] = creds.token
         else:
-            flow = Flow.from_client_config(
-                {
-                    "web": {
-                        "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
-                        "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-                        "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
-                        "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
-                        "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
-                    }
-                },
-                SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+            return None
     return creds
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/auth')
+def auth():
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+            }
+        },
+        SCOPES
+    )
+    authorization_url, _ = flow.authorization_url(prompt='consent')
+    return redirect(authorization_url)
+
+@app.route('/oauth2callback')
+def oauth2callback():
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+            }
+        },
+        SCOPES,
+        redirect_uri=os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+    )
+    flow.fetch_token(code=request.args.get('code'))
+    credentials = flow.credentials
+
+    session['token'] = credentials.token
+    session['refresh_token'] = credentials.refresh_token
+
+    return redirect(url_for('index'))
+
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
-        file = request.files['file']
-        if file:
-            creds = get_credentials()
-            service = build('drive', 'v3', credentials=creds)
+        try:
+            file = request.files['file']
+            if file:
+                creds = get_credentials()
+                if not creds:
+                    return redirect(url_for('auth'))
+                service = build('drive', 'v3', credentials=creds)
 
-            # Save file to a temporary location
-            temp_file_path = f"/tmp/{file.filename}"
-            file.save(temp_file_path)
+                file_content = file.read()
+                file_io = io.BytesIO(file_content)
 
-            file_metadata = {'name': file.filename}
-            media = MediaFileUpload(temp_file_path, mimetype=file.mimetype)
-            uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                file_metadata = {'name': file.filename}
+                media = MediaIoBaseUpload(file_io, mimetype=file.mimetype)
+                uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
 
-            # Remove temporary file
-            os.remove(temp_file_path)
-
-            flash(f'File {file.filename} uploaded successfully!')
-            return redirect(url_for('index'))
+                app.logger.info(f'File {file.filename} uploaded successfully!')
+                flash(f'File {file.filename} uploaded successfully!')
+                return redirect(url_for('index'))
+        except Exception as e:
+            app.logger.error(f'Error uploading file: {str(e)}')
+            flash(f'Error uploading file: {str(e)}')
+            return redirect(url_for('upload_file'))
     return render_template('upload.html')
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
     creds = get_credentials()
+    if not creds:
+        return redirect(url_for('auth'))
     service = build('drive', 'v3', credentials=creds)
 
     request = service.files().get_media(fileId=file_id)
@@ -93,6 +136,8 @@ def share_file(file_id):
     if request.method == 'POST':
         email = request.form['email']
         creds = get_credentials()
+        if not creds:
+            return redirect(url_for('auth'))
         service = build('drive', 'v3', credentials=creds)
 
         permission = {
@@ -112,4 +157,4 @@ def internal_server_error(error):
     return 'Internal Server Error', 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
