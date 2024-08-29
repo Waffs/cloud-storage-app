@@ -1,100 +1,142 @@
-import os
-import flask
-import requests
-import io
-import google.oauth2.credentials
-import google_auth_oauthlib.flow
-import googleapiclient.discovery
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-from dotenv import load_dotenv
+from google.auth.transport.requests import Request
+import os
+import io
+import logging
 
-load_dotenv()  # Load environment variables from .env file
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
 
-app = flask.Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')  
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
 
-# OAuth 2.0 configuration
-CLIENT_SECRETS_FILE = "client_secret.json"  
+# Define the scope
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-API_SERVICE_NAME = 'drive'
-API_VERSION = 'v3'
 
-# Ensure OAuthlib's HTTPS verification is enabled in production
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' if os.getenv('FLASK_ENV') == 'development' else '0'
+def get_credentials():
+    creds = None
+    if session.get('token'):
+        creds = Credentials(
+            token=session['token'],
+            refresh_token=session.get('refresh_token'),
+            token_uri=os.getenv('GOOGLE_TOKEN_URI'),
+            client_id=os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+            client_secret=os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+            scopes=SCOPES
+        )
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            session['token'] = creds.token
+        else:
+            return None
+    return creds
 
 @app.route('/')
 def index():
-    """Home page showing available options."""
-    if 'credentials' not in flask.session:
-        return flask.redirect(flask.url_for('authorize'))
-    return flask.render_template('index.html')
+    return render_template('index.html')
 
-@app.route('/authorize')
-def authorize():
-    """Authorize the application to access Google Drive on the user's behalf."""
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES)
-    flow.redirect_uri = flask.url_for('oauth2callback', _external=True)
-
-    authorization_url, state = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true')
-
-    flask.session['state'] = state
-    return flask.redirect(authorization_url)
+@app.route('/auth')
+def auth():
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                    "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                    "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                    "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                    "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+                }
+            },
+            SCOPES
+        )
+        # Explicitly set the redirect_uri
+        flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+        app.logger.debug(f"GOOGLE_DRIVE_REDIRECT_URI: {os.getenv('GOOGLE_DRIVE_REDIRECT_URI')}")
+        authorization_url, _ = flow.authorization_url(prompt='consent')
+        return redirect(authorization_url)
+    except Exception as e:
+        app.logger.error(f"Error in auth route: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/oauth2callback')
 def oauth2callback():
-    """Callback route for Google OAuth 2.0 flow."""
-    state = flask.session['state']
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES, state=state)
-    flow.redirect_uri = flask.url_for('oauth2callback', _external=True)
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
+                    "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+                    "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+                    "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+                    "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
+                }
+            },
+            SCOPES
+        )
+        # Explicitly set the redirect_uri
+        flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+        
+        app.logger.debug(f"Request URL: {request.url}")
+        app.logger.debug(f"GOOGLE_DRIVE_REDIRECT_URI: {os.getenv('GOOGLE_DRIVE_REDIRECT_URI')}")
+        
+        # Use the request URL to complete the flow
+        flow.fetch_token(authorization_response=request.url)
+        
+        credentials = flow.credentials
 
-    authorization_response = flask.request.url
-    flow.fetch_token(authorization_response=authorization_response)
+        session['token'] = credentials.token
+        session['refresh_token'] = credentials.refresh_token
 
-    credentials = flow.credentials
-    flask.session['credentials'] = credentials_to_dict(credentials)
-
-    return flask.redirect(flask.url_for('index'))
+        return redirect(url_for('index'))
+    except Exception as e:
+        app.logger.error(f"Error in oauth2callback: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
-    """Upload a file to Google Drive."""
-    if 'credentials' not in flask.session:
-        return flask.redirect(flask.url_for('authorize'))
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file:
+                creds = get_credentials()
+                if not creds:
+                    app.logger.info("No credentials, redirecting to auth")
+                    return redirect(url_for('auth'))
+                service = build('drive', 'v3', credentials=creds)
 
-    if flask.request.method == 'POST':
-        file = flask.request.files['file']
-        if file:
-            credentials = google.oauth2.credentials.Credentials(
-                **flask.session['credentials'])
-            service = googleapiclient.discovery.build(
-                API_SERVICE_NAME, API_VERSION, credentials=credentials)
+                file_content = file.read()
+                file_io = io.BytesIO(file_content)
 
-            file_metadata = {'name': file.filename}
-            media = MediaIoBaseUpload(io.BytesIO(file.read()), mimetype=file.content_type)
-            service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                file_metadata = {'name': file.filename}
+                media = MediaIoBaseUpload(file_io, mimetype=file.mimetype)
+                uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
 
-            return flask.redirect(flask.url_for('index'))
-
-    return flask.render_template('upload.html')
+                app.logger.info(f'File {file.filename} uploaded successfully!')
+                flash(f'File {file.filename} uploaded successfully!')
+                return redirect(url_for('index'))
+        except Exception as e:
+            app.logger.error(f'Error uploading file: {str(e)}')
+            flash(f'Error uploading file: {str(e)}')
+            return redirect(url_for('upload_file'))
+    return render_template('upload.html')
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
-    """Download a file from Google Drive."""
-    if 'credentials' not in flask.session:
-        return flask.redirect(flask.url_for('authorize'))
-
-    credentials = google.oauth2.credentials.Credentials(
-        **flask.session['credentials'])
-    service = googleapiclient.discovery.build(
-        API_SERVICE_NAME, API_VERSION, credentials=credentials)
+    creds = get_credentials()
+    if not creds:
+        return redirect(url_for('auth'))
+    service = build('drive', 'v3', credentials=creds)
 
     request = service.files().get_media(fileId=file_id)
     file_io = io.BytesIO()
     downloader = MediaIoBaseDownload(file_io, request)
+
     done = False
     while not done:
         status, done = downloader.next_chunk()
@@ -103,43 +145,32 @@ def download_file(file_id):
     file_metadata = service.files().get(fileId=file_id).execute()
     file_name = file_metadata.get('name')
 
-    return flask.send_file(file_io, as_attachment=True, download_name=file_name)
+    return send_file(file_io, as_attachment=True, download_name=file_name)
 
-@app.route('/revoke')
-def revoke():
-    """Revoke Google OAuth 2.0 credentials."""
-    if 'credentials' not in flask.session:
-        return flask.redirect(flask.url_for('authorize'))
+@app.route('/share/<file_id>', methods=['GET', 'POST'])
+def share_file(file_id):
+    if request.method == 'POST':
+        email = request.form['email']
+        creds = get_credentials()
+        if not creds:
+            return redirect(url_for('auth'))
+        service = build('drive', 'v3', credentials=creds)
 
-    credentials = google.oauth2.credentials.Credentials(
-        **flask.session['credentials'])
-    revoke = requests.post('https://oauth2.googleapis.com/revoke',
-        params={'token': credentials.token},
-        headers={'content-type': 'application/x-www-form-urlencoded'})
+        permission = {
+            'type': 'user',
+            'role': 'writer',
+            'emailAddress': email
+        }
+        service.permissions().create(fileId=file_id, body=permission, fields='id').execute()
 
-    status_code = getattr(revoke, 'status_code')
-    if status_code == 200:
-        del flask.session['credentials']
-        return 'Credentials successfully revoked.'
-    else:
-        return 'An error occurred while revoking credentials.'
+        flash(f'File shared with {email} successfully!')
+        return redirect(url_for('index'))
+    return render_template('share.html', file_id=file_id)
 
-@app.route('/clear')
-def clear_credentials():
-    """Clear session credentials."""
-    if 'credentials' in flask.session:
-        del flask.session['credentials']
-    return 'Credentials have been cleared.'
-
-def credentials_to_dict(credentials):
-    return {
-        'token': credentials.token,
-        'refresh_token': credentials.refresh_token,
-        'token_uri': credentials.token_uri,
-        'client_id': credentials.client_id,
-        'client_secret': credentials.client_secret,
-        'scopes': credentials.scopes
-    }
+@app.errorhandler(500)
+def internal_server_error(error):
+    app.logger.error('Server Error: %s', (error))
+    return 'Internal Server Error', 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
