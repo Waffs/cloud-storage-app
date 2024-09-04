@@ -62,8 +62,7 @@ def auth():
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            prompt='consent',
-            response_type='code'
+            prompt='consent'
         )
         session['state'] = state
         app.logger.debug(f"Authorization URL: {authorization_url}")
@@ -75,12 +74,14 @@ def auth():
 @app.route('/oauth2callback')
 def oauth2callback():
     try:
-        state = session['state']
+        state = session.get('state')
+        if not state:
+            return jsonify({"error": "State not found in session"}), 400
+
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
         flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
         
-        authorization_response = request.url
-        flow.fetch_token(authorization_response=authorization_response)
+        flow.fetch_token(authorization_response=request.url)
         
         credentials = flow.credentials
         session['token'] = credentials.token
