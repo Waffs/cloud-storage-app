@@ -59,18 +59,28 @@ def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
         flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
-        authorization_url, _ = flow.authorization_url(prompt='consent')
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent',
+            response_type='code'
+        )
+        session['state'] = state
+        app.logger.debug(f"Authorization URL: {authorization_url}")
         return redirect(authorization_url)
     except Exception as e:
-        app.logger.error(f"Error in auth route: {str(e)}")
+        app.logger.error(f"Error in auth route: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/oauth2callback')
 def oauth2callback():
     try:
-        flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
+        state = session['state']
+        flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
         flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
-        flow.fetch_token(authorization_response=request.url)
+        
+        authorization_response = request.url
+        flow.fetch_token(authorization_response=authorization_response)
         
         credentials = flow.credentials
         session['token'] = credentials.token
@@ -78,7 +88,7 @@ def oauth2callback():
 
         return redirect(url_for('index'))
     except Exception as e:
-        app.logger.error(f"Error in oauth2callback: {str(e)}")
+        app.logger.error(f"Error in oauth2callback: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -104,7 +114,7 @@ def upload_file():
                 flash(f'File {file.filename} uploaded successfully!')
                 return redirect(url_for('index'))
         except Exception as e:
-            app.logger.error(f'Error uploading file: {str(e)}')
+            app.logger.error(f'Error uploading file: {str(e)}', exc_info=True)
             flash(f'Error uploading file: {str(e)}')
             return redirect(url_for('upload_file'))
     return render_template('upload.html')
@@ -152,7 +162,7 @@ def share_file(file_id):
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    app.logger.error('Server Error: %s', (error))
+    app.logger.error('Server Error: %s', (error), exc_info=True)
     return 'Internal Server Error', 500
 
 if __name__ == '__main__':
