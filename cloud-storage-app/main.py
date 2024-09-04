@@ -26,8 +26,8 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        "redirect_uris": [os.getenv('GOOGLE_DRIVE_REDIRECT_URI')],
-        "javascript_origins": [os.getenv('APP_URL')]
+        "redirect_uris": ["https://my-cloud-storage-app.vercel.app/oauth2callback"],
+        "javascript_origins": ["https://my-cloud-storage-app.vercel.app"]
     }
 }
 
@@ -37,9 +37,9 @@ def get_credentials():
         creds = Credentials(
             token=session['token'],
             refresh_token=session.get('refresh_token'),
-            token_uri=os.getenv('GOOGLE_TOKEN_URI'),
-            client_id=os.getenv('GOOGLE_DRIVE_CLIENT_ID'),
-            client_secret=os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
+            token_uri=CLIENT_CONFIG['web']['token_uri'],
+            client_id=CLIENT_CONFIG['web']['client_id'],
+            client_secret=CLIENT_CONFIG['web']['client_secret'],
             scopes=SCOPES
         )
     if not creds or not creds.valid:
@@ -58,7 +58,7 @@ def index():
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
@@ -66,6 +66,7 @@ def auth():
         )
         session['state'] = state
         app.logger.debug(f"Authorization URL: {authorization_url}")
+        app.logger.debug(f"Redirect URI: {flow.redirect_uri}")
         return redirect(authorization_url)
     except Exception as e:
         app.logger.error(f"Error in auth route: {str(e)}", exc_info=True)
@@ -79,7 +80,7 @@ def oauth2callback():
             return jsonify({"error": "State not found in session"}), 400
 
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
-        flow.redirect_uri = os.getenv('GOOGLE_DRIVE_REDIRECT_URI')
+        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
         
         flow.fetch_token(authorization_response=request.url)
         
