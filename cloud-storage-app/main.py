@@ -97,22 +97,28 @@ def oauth2callback():
 def upload_file():
     if request.method == 'POST':
         try:
+            app.logger.info("Upload initiated")
             file = request.files['file']
             if file:
+                app.logger.info(f"File received: {file.filename}")
                 creds = get_credentials()
                 if not creds:
                     app.logger.info("No credentials, redirecting to auth")
                     return redirect(url_for('auth'))
+                app.logger.info("Credentials obtained")
                 service = build('drive', 'v3', credentials=creds)
+                app.logger.info("Drive service built")
 
                 file_content = file.read()
                 file_io = io.BytesIO(file_content)
+                app.logger.info("File read into memory")
 
                 file_metadata = {'name': file.filename}
                 media = MediaIoBaseUpload(file_io, mimetype=file.mimetype)
+                app.logger.info("Starting file upload to Drive")
                 uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                app.logger.info(f"File uploaded successfully. ID: {uploaded_file.get('id')}")
 
-                app.logger.info(f'File {file.filename} uploaded successfully!')
                 flash(f'File {file.filename} uploaded successfully!')
                 return redirect(url_for('index'))
         except Exception as e:
