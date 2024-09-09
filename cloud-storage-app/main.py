@@ -26,8 +26,8 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        "redirect_uris": ["https://my-cloud-storage-app.vercel.app/oauth2callback"],
-        "javascript_origins": ["https://my-cloud-storage-app.vercel.app"]
+        "redirect_uris": ["https://cloud-storage-app.vercel.app/oauth2callback"],
+        "javascript_origins": ["https://cloud-storage-app.vercel.app"]
     }
 }
 
@@ -58,7 +58,7 @@ def index():
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
+        flow.redirect_uri = "https://cloud-storage-app.vercel.app/oauth2callback"
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
@@ -81,7 +81,7 @@ def oauth2callback():
             return jsonify({"error": "State not found in session"}), 400
 
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
-        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
+        flow.redirect_uri = "https://cloud-storage-app.vercel.app/oauth2callback"
         
         flow.fetch_token(authorization_response=request.url)
         
