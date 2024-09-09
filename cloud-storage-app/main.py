@@ -26,7 +26,7 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        "redirect_uris": ["https://vercel.com/ahmad-saads-projects/cloud-storage-app/HfWHjVXz1wTLUXMSVJ7HrLqB9hV2"],
+        "redirect_uris": ["https://vercel.com/ahmad-saads-projects/cloud-storage-app/BijdGUWV3ZZAHp66RZgPAh5AysaD"],
         "javascript_origins": ["https://my-cloud-storage-app.vercel.app"]
     }
 }
