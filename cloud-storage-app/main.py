@@ -26,8 +26,8 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        "redirect_uris": ["https://cloud-storage-app.vercel.app/oauth2callback"],
-        "javascript_origins": ["https://my-cloud-storage-app.vercel.app"]
+        "redirect_uris": ["https://cloud-storage-app-es4u.onrender.com/oauth2callback"],
+        "javascript_origins": ["https://cloud-storage-app-es4u.onrender.com"]
     }
 }
 
