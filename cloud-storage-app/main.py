@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify, make_response
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -9,7 +9,7 @@ import io
 import logging
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')
+app.secret_key = os.getenv('SECRET_KEY')  # Needed for session management
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -64,6 +64,7 @@ def auth():
             include_granted_scopes='true',
             prompt='consent'
         )
+        # Save the state in session to protect against CSRF attacks
         session['state'] = state
         app.logger.debug(f"Authorization URL: {authorization_url}")
         app.logger.debug(f"Redirect URI: {flow.redirect_uri}")
@@ -180,5 +181,6 @@ def internal_server_error(error):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
+
 
 
