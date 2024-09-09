@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify, make_response
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -31,23 +31,23 @@ CLIENT_CONFIG = {
     }
 }
 
-def get_credentials():
-    creds = None
-    if session.get('token'):
-        creds = Credentials(
-            token=session['token'],
-            refresh_token=session.get('refresh_token'),
-            token_uri=CLIENT_CONFIG['web']['token_uri'],
-            client_id=CLIENT_CONFIG['web']['client_id'],
-            client_secret=CLIENT_CONFIG['web']['client_secret'],
-            scopes=SCOPES
-        )
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            session['token'] = creds.token
-        else:
-            return None
+# Function to get credentials from cookies
+def get_credentials_from_cookies():
+    token = request.cookies.get('token')
+    refresh_token = request.cookies.get('refresh_token')
+    if not token:
+        return None
+    
+    creds = Credentials(
+        token=token,
+        refresh_token=refresh_token,
+        token_uri=CLIENT_CONFIG['web']['token_uri'],
+        client_id=CLIENT_CONFIG['web']['client_id'],
+        client_secret=CLIENT_CONFIG['web']['client_secret'],
+        scopes=SCOPES
+    )
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
     return creds
 
 @app.route('/')
@@ -85,10 +85,13 @@ def oauth2callback():
         flow.fetch_token(authorization_response=request.url)
         
         credentials = flow.credentials
-        session['token'] = credentials.token
-        session['refresh_token'] = credentials.refresh_token
+        
+        # Store credentials in cookies
+        response = make_response(redirect(url_for('index')))
+        response.set_cookie('token', credentials.token, httponly=True, secure=True)
+        response.set_cookie('refresh_token', credentials.refresh_token, httponly=True, secure=True)
 
-        return redirect(url_for('index'))
+        return response
     except Exception as e:
         app.logger.error(f"Error in oauth2callback: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -101,10 +104,12 @@ def upload_file():
             file = request.files['file']
             if file:
                 app.logger.info(f"File received: {file.filename}")
-                creds = get_credentials()
+                
+                creds = get_credentials_from_cookies()
                 if not creds:
                     app.logger.info("No credentials, redirecting to auth")
                     return redirect(url_for('auth'))
+                
                 app.logger.info("Credentials obtained")
                 service = build('drive', 'v3', credentials=creds)
                 app.logger.info("Drive service built")
@@ -129,7 +134,7 @@ def upload_file():
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
-    creds = get_credentials()
+    creds = get_credentials_from_cookies()
     if not creds:
         return redirect(url_for('auth'))
     service = build('drive', 'v3', credentials=creds)
@@ -152,7 +157,7 @@ def download_file(file_id):
 def share_file(file_id):
     if request.method == 'POST':
         email = request.form['email']
-        creds = get_credentials()
+        creds = get_credentials_from_cookies()
         if not creds:
             return redirect(url_for('auth'))
         service = build('drive', 'v3', credentials=creds)
@@ -175,4 +180,5 @@ def internal_server_error(error):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
+
 
