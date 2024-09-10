@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
+from http.server import BaseHTTPRequestHandler
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -168,10 +169,22 @@ def share_file(file_id):
         return redirect(url_for('index'))
     return render_template('share.html', file_id=file_id)
 
-@app.errorhandler(500)
-def internal_server_error(error):
-    app.logger.error('Server Error: %s', (error), exc_info=True)
-    return 'Internal Server Error', 500
+
+def handler(event, context):
+    return app(event, context)
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Hello, World!')
+
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Received POST request')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
