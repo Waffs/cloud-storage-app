@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -9,16 +9,13 @@ import io
 import logging
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')  # Needed for session management
+app.secret_key = os.getenv('SECRET_KEY')
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Define the scope
-SCOPES = ['https://www.googleapis.com/auth/drive']
-
-# Get Vercel's production domain or fallback to default
-PRODUCTION_URL = os.getenv('VERCEL_URL', 'https://cloud-storage-app.vercel.app')
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 # Load client config from environment variables or a secure location
 CLIENT_CONFIG = {
@@ -29,27 +26,28 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        "redirect_uris": [f"{PRODUCTION_URL}/oauth2callback"],
-        "javascript_origins": [f"{PRODUCTION_URL}"]
+        "redirect_uris": ["https://my-cloud-storage-app.vercel.app/oauth2callback"],
+        "javascript_origins": ["https://my-cloud-storage-app.vercel.app"]
     }
 }
 
-def get_credentials_from_cookies():
-    token = request.cookies.get('token')
-    refresh_token = request.cookies.get('refresh_token')
-    if not token:
-        return None
-
-    creds = Credentials(
-        token=token,
-        refresh_token=refresh_token,
-        token_uri=CLIENT_CONFIG['web']['token_uri'],
-        client_id=CLIENT_CONFIG['web']['client_id'],
-        client_secret=CLIENT_CONFIG['web']['client_secret'],
-        scopes=SCOPES
-    )
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+def get_credentials():
+    creds = None
+    if session.get('token'):
+        creds = Credentials(
+            token=session['token'],
+            refresh_token=session.get('refresh_token'),
+            token_uri=CLIENT_CONFIG['web']['token_uri'],
+            client_id=CLIENT_CONFIG['web']['client_id'],
+            client_secret=CLIENT_CONFIG['web']['client_secret'],
+            scopes=SCOPES
+        )
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            session['token'] = creds.token
+        else:
+            return None
     return creds
 
 @app.route('/')
@@ -60,12 +58,11 @@ def index():
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        flow.redirect_uri = f"{PRODUCTION_URL}/oauth2callback"
+        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
             prompt='consent'
-            # Remove the response_type='code' line
         )
         session['state'] = state
         app.logger.debug(f"Authorization URL: {authorization_url}")
@@ -75,7 +72,6 @@ def auth():
         app.logger.error(f"Error in auth route: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/oauth2callback')
 def oauth2callback():
     try:
@@ -84,17 +80,15 @@ def oauth2callback():
             return jsonify({"error": "State not found in session"}), 400
 
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
-        flow.redirect_uri = f"{PRODUCTION_URL}/oauth2callback"
+        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
         
         flow.fetch_token(authorization_response=request.url)
         
         credentials = flow.credentials
-        
-        response = make_response(redirect(url_for('index')))
-        response.set_cookie('token', credentials.token, httponly=True, secure=True)
-        response.set_cookie('refresh_token', credentials.refresh_token, httponly=True, secure=True)
+        session['token'] = credentials.token
+        session['refresh_token'] = credentials.refresh_token
 
-        return response
+        return redirect(url_for('index'))
     except Exception as e:
         app.logger.error(f"Error in oauth2callback: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -107,12 +101,10 @@ def upload_file():
             file = request.files['file']
             if file:
                 app.logger.info(f"File received: {file.filename}")
-                
-                creds = get_credentials_from_cookies()
+                creds = get_credentials()
                 if not creds:
                     app.logger.info("No credentials, redirecting to auth")
                     return redirect(url_for('auth'))
-                
                 app.logger.info("Credentials obtained")
                 service = build('drive', 'v3', credentials=creds)
                 app.logger.info("Drive service built")
@@ -137,7 +129,7 @@ def upload_file():
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
-    creds = get_credentials_from_cookies()
+    creds = get_credentials()
     if not creds:
         return redirect(url_for('auth'))
     service = build('drive', 'v3', credentials=creds)
@@ -160,7 +152,7 @@ def download_file(file_id):
 def share_file(file_id):
     if request.method == 'POST':
         email = request.form['email']
-        creds = get_credentials_from_cookies()
+        creds = get_credentials()
         if not creds:
             return redirect(url_for('auth'))
         service = build('drive', 'v3', credentials=creds)
@@ -183,4 +175,3 @@ def internal_server_error(error):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
-
