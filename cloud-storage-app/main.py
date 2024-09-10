@@ -17,6 +17,9 @@ logging.basicConfig(level=logging.DEBUG)
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
+# Get Vercel's production domain or fallback to default
+PRODUCTION_URL = os.getenv('VERCEL_URL', 'https://cloud-storage-app.vercel.app')
+
 # Load client config from environment variables or a secure location
 CLIENT_CONFIG = {
     "web": {
@@ -26,8 +29,9 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        "redirect_uris": ["https://cloud-storage-app.vercel.app/oauth2callback"],
-        "javascript_origins": ["https://cloud-storage-app.vercel.app"]
+        # Use dynamic production URL for redirect URIs
+        "redirect_uris": [f"{PRODUCTION_URL}/oauth2callback"],
+        "javascript_origins": [f"{PRODUCTION_URL}"]
     }
 }
 
@@ -37,7 +41,7 @@ def get_credentials_from_cookies():
     refresh_token = request.cookies.get('refresh_token')
     if not token:
         return None
-    
+
     creds = Credentials(
         token=token,
         refresh_token=refresh_token,
@@ -58,7 +62,8 @@ def index():
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        flow.redirect_uri = "https://cloud-storage-app.vercel.app/oauth2callback"
+        # Dynamically set redirect_uri based on Vercel's production domain
+        flow.redirect_uri = f"{PRODUCTION_URL}/oauth2callback"
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
@@ -81,7 +86,7 @@ def oauth2callback():
             return jsonify({"error": "State not found in session"}), 400
 
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
-        flow.redirect_uri = "https://cloud-storage-app.vercel.app/oauth2callback"
+        flow.redirect_uri = f"{PRODUCTION_URL}/oauth2callback"
         
         flow.fetch_token(authorization_response=request.url)
         
