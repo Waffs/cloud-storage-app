@@ -15,7 +15,7 @@ app.secret_key = os.getenv('SECRET_KEY')  # Needed for session management
 logging.basicConfig(level=logging.DEBUG)
 
 # Define the scope
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 # Get Vercel's production domain or fallback to default
 PRODUCTION_URL = os.getenv('VERCEL_URL', 'https://cloud-storage-app.vercel.app')
@@ -29,13 +29,11 @@ CLIENT_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.getenv('GOOGLE_DRIVE_CLIENT_SECRET'),
-        # Use dynamic production URL for redirect URIs
         "redirect_uris": [f"{PRODUCTION_URL}/oauth2callback"],
         "javascript_origins": [f"{PRODUCTION_URL}"]
     }
 }
 
-# Function to get credentials from cookies
 def get_credentials_from_cookies():
     token = request.cookies.get('token')
     refresh_token = request.cookies.get('refresh_token')
@@ -62,14 +60,13 @@ def index():
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        # Dynamically set redirect_uri based on Vercel's production domain
         flow.redirect_uri = f"{PRODUCTION_URL}/oauth2callback"
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            prompt='consent'
+            prompt='consent',
+            response_type='code'
         )
-        # Save the state in session to protect against CSRF attacks
         session['state'] = state
         app.logger.debug(f"Authorization URL: {authorization_url}")
         app.logger.debug(f"Redirect URI: {flow.redirect_uri}")
@@ -92,7 +89,6 @@ def oauth2callback():
         
         credentials = flow.credentials
         
-        # Store credentials in cookies
         response = make_response(redirect(url_for('index')))
         response.set_cookie('token', credentials.token, httponly=True, secure=True)
         response.set_cookie('refresh_token', credentials.refresh_token, httponly=True, secure=True)
@@ -186,6 +182,4 @@ def internal_server_error(error):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
-
-
 
