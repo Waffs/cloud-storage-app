@@ -64,8 +64,8 @@ def auth():
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            prompt='consent',
-            response_type='code'
+            prompt='consent'
+            # Remove the response_type='code' line
         )
         session['state'] = state
         app.logger.debug(f"Authorization URL: {authorization_url}")
@@ -74,6 +74,7 @@ def auth():
     except Exception as e:
         app.logger.error(f"Error in auth route: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/oauth2callback')
 def oauth2callback():
