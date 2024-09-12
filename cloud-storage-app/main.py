@@ -33,6 +33,17 @@ CLIENT_CONFIG = {
 
 REDIRECT_URI = "https://my-cloud-storage-app.vercel.app/oauth2callback"
 
+@app.before_request
+def log_request_info():
+    app.logger.info('Headers: %s', request.headers)
+    app.logger.info('Body: %s', request.get_data())
+
+@app.after_request
+def log_response_info(response):
+    app.logger.info('Response Status: %s', response.status)
+    app.logger.info('Response Headers: %s', response.headers)
+    return response
+
 def get_credentials():
     creds = None
     if 'token' in session:
@@ -62,8 +73,13 @@ def index():
     return render_template('index.html')
 
 @app.route('/favicon.ico')
+@app.route('/favicon.png')
 def favicon():
-    return send_from_directory(app.template_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    try:
+        return send_from_directory(app.template_folder, 'favicon.ico', mimetype='image/x-icon')
+    except Exception as e:
+        app.logger.error(f"Error serving favicon: {str(e)}")
+        return '', 404  # Return empty response with 404 status
 
 @app.route('/auth')
 def auth():
@@ -196,6 +212,10 @@ def share_file(file_id):
             flash(f'Error sharing file: {str(e)}')
             return redirect(url_for('share_file', file_id=file_id))
     return render_template('share.html', file_id=file_id)
+
+@app.route('/test')
+def test():
+    return "Flask is running!"
 
 @app.errorhandler(500)
 def internal_server_error(error):
