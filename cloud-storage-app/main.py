@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify, send_from_directory
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -8,11 +8,11 @@ import os
 import io
 import logging
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY')
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -58,7 +58,12 @@ def get_credentials():
 
 @app.route('/')
 def index():
+    app.logger.info("Index route accessed")
     return render_template('index.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(app.template_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/auth')
 def auth():
@@ -71,8 +76,8 @@ def auth():
             prompt='consent'
         )
         session['state'] = state
-        app.logger.debug(f"Authorization URL: {authorization_url}")
-        app.logger.debug(f"Redirect URI: {flow.redirect_uri}")
+        app.logger.info(f"Authorization URL: {authorization_url}")
+        app.logger.info(f"Redirect URI: {flow.redirect_uri}")
         return redirect(authorization_url)
     except Exception as e:
         app.logger.error(f"Error in auth route: {str(e)}", exc_info=True)
@@ -88,7 +93,7 @@ def oauth2callback():
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
         flow.redirect_uri = REDIRECT_URI
         
-        app.logger.debug(f"Redirect URI in oauth2callback: {flow.redirect_uri}")
+        app.logger.info(f"Redirect URI in oauth2callback: {flow.redirect_uri}")
         
         flow.fetch_token(authorization_response=request.url)
         
