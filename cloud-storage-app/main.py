@@ -31,6 +31,8 @@ CLIENT_CONFIG = {
     }
 }
 
+REDIRECT_URI = "https://my-cloud-storage-app.vercel.app/oauth2callback"
+
 def get_credentials():
     creds = None
     if 'token' in session:
@@ -62,7 +64,7 @@ def index():
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        flow.redirect_uri = url_for('oauth2callback', _external=True)
+        flow.redirect_uri = REDIRECT_URI
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
@@ -84,7 +86,9 @@ def oauth2callback():
             return jsonify({"error": "State not found in session"}), 400
 
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
-        flow.redirect_uri = url_for('oauth2callback', _external=True)
+        flow.redirect_uri = REDIRECT_URI
+        
+        app.logger.debug(f"Redirect URI in oauth2callback: {flow.redirect_uri}")
         
         flow.fetch_token(authorization_response=request.url)
         
