@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, jsonify, send_from_directory
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -8,11 +8,11 @@ import os
 import io
 import logging
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY')
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -31,9 +31,22 @@ CLIENT_CONFIG = {
     }
 }
 
+REDIRECT_URI = "https://my-cloud-storage-app.vercel.app/oauth2callback"
+
+@app.before_request
+def log_request_info():
+    app.logger.info('Headers: %s', request.headers)
+    app.logger.info('Body: %s', request.get_data())
+
+@app.after_request
+def log_response_info(response):
+    app.logger.info('Response Status: %s', response.status)
+    app.logger.info('Response Headers: %s', response.headers)
+    return response
+
 def get_credentials():
     creds = None
-    if session.get('token'):
+    if 'token' in session:
         creds = Credentials(
             token=session['token'],
             refresh_token=session.get('refresh_token'),
@@ -44,29 +57,43 @@ def get_credentials():
         )
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            session['token'] = creds.token
+            try:
+                creds.refresh(Request())
+                session['token'] = creds.token
+            except Exception as e:
+                app.logger.error(f"Error refreshing token: {str(e)}")
+                return None
         else:
             return None
     return creds
 
 @app.route('/')
 def index():
+    app.logger.info("Index route accessed")
     return render_template('index.html')
+
+@app.route('/favicon.ico')
+@app.route('/favicon.png')
+def favicon():
+    try:
+        return send_from_directory(app.template_folder, 'favicon.ico', mimetype='image/x-icon')
+    except Exception as e:
+        app.logger.error(f"Error serving favicon: {str(e)}")
+        return '', 404  # Return empty response with 404 status
 
 @app.route('/auth')
 def auth():
     try:
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES)
-        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
+        flow.redirect_uri = REDIRECT_URI
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
             prompt='consent'
         )
         session['state'] = state
-        app.logger.debug(f"Authorization URL: {authorization_url}")
-        app.logger.debug(f"Redirect URI: {flow.redirect_uri}")
+        app.logger.info(f"Authorization URL: {authorization_url}")
+        app.logger.info(f"Redirect URI: {flow.redirect_uri}")
         return redirect(authorization_url)
     except Exception as e:
         app.logger.error(f"Error in auth route: {str(e)}", exc_info=True)
@@ -75,12 +102,14 @@ def auth():
 @app.route('/oauth2callback')
 def oauth2callback():
     try:
-        state = session.get('state')
+        state = session.pop('state', None)
         if not state:
             return jsonify({"error": "State not found in session"}), 400
 
         flow = Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
-        flow.redirect_uri = "https://my-cloud-storage-app.vercel.app/oauth2callback"
+        flow.redirect_uri = REDIRECT_URI
+        
+        app.logger.info(f"Redirect URI in oauth2callback: {flow.redirect_uri}")
         
         flow.fetch_token(authorization_response=request.url)
         
@@ -98,7 +127,13 @@ def upload_file():
     if request.method == 'POST':
         try:
             app.logger.info("Upload initiated")
+            if 'file' not in request.files:
+                flash('No file part')
+                return redirect(request.url)
             file = request.files['file']
+            if file.filename == '':
+                flash('No selected file')
+                return redirect(request.url)
             if file:
                 app.logger.info(f"File received: {file.filename}")
                 creds = get_credentials()
@@ -114,7 +149,7 @@ def upload_file():
                 app.logger.info("File read into memory")
 
                 file_metadata = {'name': file.filename}
-                media = MediaIoBaseUpload(file_io, mimetype=file.mimetype)
+                media = MediaIoBaseUpload(file_io, mimetype=file.content_type, resumable=True)
                 app.logger.info("Starting file upload to Drive")
                 uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
                 app.logger.info(f"File uploaded successfully. ID: {uploaded_file.get('id')}")
@@ -132,21 +167,26 @@ def download_file(file_id):
     creds = get_credentials()
     if not creds:
         return redirect(url_for('auth'))
-    service = build('drive', 'v3', credentials=creds)
+    try:
+        service = build('drive', 'v3', credentials=creds)
 
-    request = service.files().get_media(fileId=file_id)
-    file_io = io.BytesIO()
-    downloader = MediaIoBaseDownload(file_io, request)
+        request = service.files().get_media(fileId=file_id)
+        file_io = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_io, request)
 
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
 
-    file_io.seek(0)
-    file_metadata = service.files().get(fileId=file_id).execute()
-    file_name = file_metadata.get('name')
+        file_io.seek(0)
+        file_metadata = service.files().get(fileId=file_id, fields='name').execute()
+        file_name = file_metadata.get('name', 'downloaded_file')
 
-    return send_file(file_io, as_attachment=True, download_name=file_name)
+        return send_file(file_io, as_attachment=True, download_name=file_name)
+    except Exception as e:
+        app.logger.error(f'Error downloading file: {str(e)}', exc_info=True)
+        flash(f'Error downloading file: {str(e)}')
+        return redirect(url_for('index'))
 
 @app.route('/share/<file_id>', methods=['GET', 'POST'])
 def share_file(file_id):
@@ -155,18 +195,27 @@ def share_file(file_id):
         creds = get_credentials()
         if not creds:
             return redirect(url_for('auth'))
-        service = build('drive', 'v3', credentials=creds)
+        try:
+            service = build('drive', 'v3', credentials=creds)
 
-        permission = {
-            'type': 'user',
-            'role': 'writer',
-            'emailAddress': email
-        }
-        service.permissions().create(fileId=file_id, body=permission, fields='id').execute()
+            permission = {
+                'type': 'user',
+                'role': 'writer',
+                'emailAddress': email
+            }
+            service.permissions().create(fileId=file_id, body=permission, fields='id').execute()
 
-        flash(f'File shared with {email} successfully!')
-        return redirect(url_for('index'))
+            flash(f'File shared with {email} successfully!')
+            return redirect(url_for('index'))
+        except Exception as e:
+            app.logger.error(f'Error sharing file: {str(e)}', exc_info=True)
+            flash(f'Error sharing file: {str(e)}')
+            return redirect(url_for('share_file', file_id=file_id))
     return render_template('share.html', file_id=file_id)
+
+@app.route('/test')
+def test():
+    return "Flask is running!"
 
 @app.errorhandler(500)
 def internal_server_error(error):
@@ -174,4 +223,4 @@ def internal_server_error(error):
     return 'Internal Server Error', 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=False)
