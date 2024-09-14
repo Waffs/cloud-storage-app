@@ -4,74 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloud Storage App</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-        }
-
-        .container {
-            text-align: center;
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-
-        li {
-            margin: 10px 0;
-        }
-
-        a {
-            text-decoration: none;
-            color: #4CAF50;
-            font-weight: bold;
-        }
-
-        a:hover {
-            color: #45a049;
-        }
-
-        .messages {
-            margin-top: 20px;
-            color: #d9534f; /* Red color for messages */
-        }
-
-    </style>
+    <link rel="stylesheet" href="../static/css/stylesForIndex.css"> <!-- Link to external CSS file -->
+        
 </head>
 <body>
-    <div class="container">
-        <h1>Project Stake Academy Cloud Storage App</h1>
-        <ul>
-            <li><a href="{{ url_for('upload_file') }}">Upload File</a></li>
-        </ul>
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div class="messages">
-                    <ul>
-                        {% for message in messages %}
-                            <li>{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-        {% endwith %}
-    </div>
+
+    <!-- Header Section -->
+    <header>
+        <div class="logo">
+            <h2>Cloud Storage</h2>
+        </div>
+        <nav>
+            <a href="#">Home</a>
+            <a href="#">Features</a>
+            <a href="#">Pricing</a>
+            <a href="#">About</a>
+            <a href="#">Contact</a>
+        </nav>
+        <div class="auth-buttons">
+            <a href="login.html">Login</a>
+            <a href="signup.html">Signup</a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Secure Cloud Storage for All Your Files</h1>
+        <p>Store, access, and share your files anytime, anywhere.</p>
+        <button onclick="window.location.href='signup.html'">Get Started</button>
+        <button onclick="window.location.href='login.html'">Login</button>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <h2>Features</h2>
+        <div class="features-container">
+            <div class="feature-card">
+                <h3>Fast and Secure Uploads</h3>
+                <p>Upload your files quickly with bank-level security.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Unlimited Storage</h3>
+                <p>Flexible plans for all your storage needs.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Collaborative Sharing</h3>
+                <p>Easily share files and folders with anyone.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="features">
+        <h2>How It Works</h2>
+        <div class="features-container">
+            <div class="feature-card">
+                <h3>Sign Up</h3>
+                <p>Create your account in seconds.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Upload Files</h3>
+                <p>Upload files and organize them in folders.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Access Anywhere</h3>
+                <p>Retrieve your files from any device, any time.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="pricing">
+        <h2>Plans & Pricing</h2>
+        <div class="pricing-container">
+            <div class="pricing-card">
+                <h3>Free Plan</h3>
+                <p>5 GB storage</p>
+                <button>Sign Up</button>
+            </div>
+            <div class="pricing-card">
+                <h3>Pro Plan</h3>
+                <p>50 GB storage</p>
+                <button>Sign Up</button>
+            </div>
+            <div class="pricing-card">
+                <h3>Business Plan</h3>
+                <p>200 GB storage</p>
+                <button>Sign Up</button>
+            </div>
+        </div>
+        
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials">
+        <h2>What Our Users Say</h2>
+        <blockquote>
+            <p>"This cloud storage service has been a game-changer for my business."</p>
+            <footer>- CEO, PAJ Bag Manufacturer</footer>
+        </blockquote>
+    </section>
+
+    <!-- Footer Section -->
+    <footer>
+        <p>&copy; 2024 Cloud Storage. All Rights Reserved.</p>
+        <p><a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a></p>
+        <p>Follow us on: 
+            <a href="#">Facebook</a> | 
+            <a href="#">Twitter</a> | 
+            <a href="#">LinkedIn</a>
+        </p>
+    </footer>
+
 </body>
 </html>

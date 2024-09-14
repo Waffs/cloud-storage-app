@@ -1,0 +1,72 @@
+
+body {
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 0;
+      }
+      header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px;
+          background-color: #333;
+          color: white;
+      }
+      header a {
+          color: white;
+          margin-right: 15px;
+          text-decoration: none;
+      }
+      .hero {
+          height: 350px;
+          text-align: center;
+          padding: 100px 20px;
+          background-image: url('../assets/cloud.jpg'); /* Replace with your image */
+          background-size: cover;
+          background-position: center;
+          background-color: rgba(0, 0, 0, 1);
+          color: white;
+          text-shadow: 1px 1px #333;
+      }
+      .hero h1 {
+          font-size: 48px;
+          margin-bottom: 20px;
+      }
+      .hero button {
+          padding: 15px 30px;
+          font-size: 18px;
+          margin: 10px;
+          border: none;
+          background-color: #F5A623;
+          color: white;
+          border-radius: 5px;
+          cursor: pointer;
+      }
+      .features, .pricing, .testimonials {
+          text-align: center;
+          padding: 50px 20px;
+      }
+
+      .features-container, .pricing-container {
+          display: flex;
+      }
+
+      .feature-card, .pricing-card {
+          display: inline-block;
+          width: 35%;
+          padding: 20px;
+          margin: 10px;
+          background-color: #f9f9f9;
+          border: 1px solid #ddd;
+          border-radius: 5px;
+      }
+      footer {
+          padding: 20px;
+          background-color: #333;
+          color: white;
+          text-align: center;
+      }
+      footer a {
+          color: #F5A623;
+          text-decoration: none;
+      }

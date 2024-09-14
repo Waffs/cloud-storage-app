@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Storage App</title>
+    <link rel="stylesheet" href="../static/css/stylesForAddFile.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Project Stake Academy Cloud Storage App</h1>
+        <ul>
+            <li><a href="{{ url_for('upload_file') }}">Upload File</a></li>
+        </ul>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="messages">
+                    <ul>
+                        {% for message in messages %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
