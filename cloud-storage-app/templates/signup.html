@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/css/stylesForLogin.css">
+    <title>Sign Up</title>
+</head>
+<body>
+    <div class="form-container">
+        <h2>Sign Up</h2>
+        <form id="signupForm">
+            <input type="email" id="email" placeholder="Email"><br>
+            <p class="error-message" id="email-error"></p>
+        
+            <input type="password" id="password" placeholder="Password" required minlength="6"><br>
+            <p class="error-message" id="signup-password-error"></p>
+        
+            <button type="submit" id="signup" class="loginbtn">Sign Up</button>
+            <p class="message" id="signup-message"></p> 
+        </form>
+        
+    </div>
+
+
+<script type="module" src="../logic/script.js"></script>
+</body>
+</html>
