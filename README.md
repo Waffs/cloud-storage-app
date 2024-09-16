@@ -1,24 +1,26 @@
 # cloud-storage-app
 
-<p>Welcome to Cloud Storage App, a cloud-based platform where users can securely store and manage their files, including videos, documents, pictures, and more. Our service offers both free and subscription-based plans to meet the diverse storage needs of our users.</p>
+A cloud-based platform where users can securely store and manage their files, including videos, documents, pictures, and more.
+Our service offers free and subscription-based plans to meet the diverse storage needs of our users.
 
-##Features
-File Types Supported: Store a wide variety of file types, including videos, documents, images, and other formats.
+Features
+File Types Supported: Store various file types, including videos, documents, images, and other formats.
 User-Friendly Interface: Easy-to-use interface for uploading, organizing, and managing files.
 Cloud-Based: Access your files from anywhere, anytime with internet connectivity.
+
 Flexible Storage Plans:
 Free Plan: 5 GB of free cloud storage.
-Subscription Plans: Paid plans offering up to 50 GB of storage, ideal for users with more extensive storage requirements.
+Subscription Plans: Paid plans offer up to 50 GB of storage, ideal for users with more extensive storage requirements.
 
-##Live Demo
+Live Demo
 https://cloud-storage-app.vercel.app/
 
-##Tech Stack
+Tech Stack
 Frontend: HTML, CSS, JavaScript
 Backend: Python, Firebase (for authentication and storage)
 Deployment: Vercel
 
-##Contributing
+Contributing
 We welcome contributions to improve the app! If you'd like to contribute, follow these steps:
 
 Fork the repository.
