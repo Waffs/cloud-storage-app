@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
      //authentication error messages
     function errorMessages(errorCode) {
-        switch (errorCode) {
+        switch (errorCode) { 
             case "auth/user-not-found":
                 return "No user found with this email.";
             case "auth/wrong-password":
